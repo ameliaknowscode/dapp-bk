@@ -50,7 +50,7 @@ RUN if [ "$DATA_REL_TYPE" = "mysql" ] || [ "$DATA_REL_TYPE" = "mariadb" ]; then 
 # MongoDB libraries (if needed)
 RUN if [ "$DATA_NONREL_TYPE" = "mongodb" ]; then \
         echo "Installing MongoDB dependencies..." && \
-        apt-get install -y libcurl4-openssl-dev pkg-config && \
+        apt-get install -y libcurl4-openssl-dev pkg-config libssl-dev && \
         echo "...finished installing MongoDB dependencies."; \
     fi
 
@@ -138,10 +138,11 @@ RUN echo "Setting web directory permissions..." && \
     chown -R www-data:www-data $WEBDIR && \
     echo "...finished setting web directory permissions."
 
-RUN echo "Configuring Apache DocumentRoot..." && \
+RUN echo "Configuring Apache DocumentRoot and AllowOverride..." && \
     sed -i 's|DocumentRoot /var/www/html|DocumentRoot /var/www/html/public|g' /etc/apache2/sites-available/000-default.conf && \
     sed -i 's|<Directory /var/www/>|<Directory /var/www/html/public>|g' /etc/apache2/apache2.conf && \
-    echo "...finished configuring Apache DocumentRoot."
+    sed -i 's|AllowOverride None|AllowOverride All|g' /etc/apache2/apache2.conf && \
+    echo "...finished configuring Apache DocumentRoot and AllowOverride."
 
 RUN echo "###### DOCKER BUILD COMPLETED #####"
 
