@@ -19,34 +19,39 @@ export async function findProjectRoot() {
 
   for (let i = 0; i < maxLevels; i++) {
     try {
+      await fs.access(path.join(current, '.env'));
+      return current;
+    } catch {}
+
+    try {
       await fs.access(path.join(current, 'build', '.env'));
       return current;
-    } catch {
-      const parent = path.dirname(current);
-      if (parent === current) break;
-      current = parent;
-    }
+    } catch {}
+
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
   }
 
-  // Check if we're in build directory
-  try {
-    await fs.access(path.join(process.cwd(), '.env'));
-    return path.dirname(process.cwd());
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 /**
  * Load environment variables from .env
  */
 export async function loadEnvironment(projectRoot) {
-  const envFile = path.join(projectRoot, 'build', '.env');
+  let envFile = path.join(projectRoot, '.env');
 
   try {
     await fs.access(envFile);
   } catch {
-    console.error(chalk.red(`Error: Environment file not found: ${envFile}`));
+    envFile = path.join(projectRoot, 'build', '.env');
+  }
+
+  try {
+    await fs.access(envFile);
+  } catch {
+    console.error(chalk.red(`Error: Environment file not found in project root or build/`));
     console.log('Please create .env from .env.example');
     return null;
   }
@@ -261,7 +266,11 @@ async function buildAppContainer(docker, env, projectRoot, containerName) {
       {
         dockerfile: dockerfile,
         t: containerName,
-        buildargs: env.APP_BASE_IMAGE ? { BASE_IMAGE: env.APP_BASE_IMAGE } : undefined,
+        buildargs: {
+          ...(env.APP_BASE_IMAGE    ? { BASE_IMAGE: env.APP_BASE_IMAGE }           : {}),
+          ...(env.DATA_REL_TYPE     ? { DATA_REL_TYPE: env.DATA_REL_TYPE }         : {}),
+          ...(env.DATA_NONREL_TYPE  ? { DATA_NONREL_TYPE: env.DATA_NONREL_TYPE }   : {}),
+        },
       }
     );
 
@@ -293,9 +302,9 @@ async function buildAppContainer(docker, env, projectRoot, containerName) {
     };
 
     // Add volume mounts if specified
-    if (env.APP_VOLUME_HOST) {
+    if (env.APP_HOST_VOLUME_PATH) {
       createOptions.HostConfig.Binds = [
-        `${env.APP_VOLUME_HOST}:${env.APP_VOLUME_CONTAINER || '/var/www/html'}:rw`,
+        `${env.APP_HOST_VOLUME_PATH}:${env.APP_CONTAINER_VOLUME_PATH || '/var/www/html'}:rw`,
       ];
     }
 

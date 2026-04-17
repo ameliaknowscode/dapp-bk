@@ -184,25 +184,25 @@ def find_project_root() -> Optional[Path]:
     max_levels = 5
 
     for _ in range(max_levels):
+        if (current / '.env').exists():
+            return current
         if (current / 'build' / '.env').exists():
             return current
         if current.parent == current:
             break
         current = current.parent
 
-    # Check if we're in build directory
-    if (Path.cwd() / '.env').exists():
-        return Path.cwd().parent
-
     return None
 
 
 def load_environment(project_root: Path) -> Optional[Dict[str, str]]:
     """Load environment variables from .env"""
-    env_file = project_root / 'build' / '.env'
+    env_file = project_root / '.env'
+    if not env_file.exists():
+        env_file = project_root / 'build' / '.env'
 
     if not env_file.exists():
-        click.secho(f'Error: Environment file not found: {env_file}', fg='red')
+        click.secho('Error: Environment file not found in project root or build/', fg='red')
         click.echo('Please create .env from .env.example')
         return None
 
@@ -303,7 +303,11 @@ def build_app_container(client: docker.DockerClient, env: Dict[str, str],
             path=str(project_root),
             dockerfile=dockerfile,
             tag=container_name,
-            buildargs={'BASE_IMAGE': env.get('APP_BASE_IMAGE', '')} if env.get('APP_BASE_IMAGE') else None
+            buildargs={
+                **({'BASE_IMAGE': env['APP_BASE_IMAGE']}           if env.get('APP_BASE_IMAGE')   else {}),
+                **({'DATA_REL_TYPE': env['DATA_REL_TYPE']}         if env.get('DATA_REL_TYPE')    else {}),
+                **({'DATA_NONREL_TYPE': env['DATA_NONREL_TYPE']}   if env.get('DATA_NONREL_TYPE') else {}),
+            } or None
         )
 
         for log in build_logs:
@@ -318,9 +322,9 @@ def build_app_container(client: docker.DockerClient, env: Dict[str, str],
         ports = {f'{container_port}/tcp': host_port}
         
         volumes = {}
-        if env.get('APP_VOLUME_HOST'):
-            volumes[env['APP_VOLUME_HOST']] = {
-                'bind': env.get('APP_VOLUME_CONTAINER', '/var/www/html'),
+        if env.get('APP_HOST_VOLUME_PATH'):
+            volumes[env['APP_HOST_VOLUME_PATH']] = {
+                'bind': env.get('APP_CONTAINER_VOLUME_PATH', '/var/www/html'),
                 'mode': 'rw'
             }
 
